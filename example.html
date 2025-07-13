@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>LRC 歌詞同期プレーヤー</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 12px;
+      background: #f6f6f6;
+    }
+    h2 {
+      font-size: 1.4em;
+      margin-bottom: 10px;
+    }
+    .lyrics-display {
+      height: 40vh;
+      min-height: 160px;
+      max-height: 320px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 8px;
+      margin-top: 10px;
+      background: #fafafa;
+      font-size: 1.1em;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    .lyrics-line {
+      cursor: pointer;
+      margin: 0;
+      padding: 8px 4px;
+      transition: background 0.2s;
+      border-radius: 4px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .lyrics-line:active,
+    .lyrics-line:hover {
+      background: #e0e0e0;
+    }
+    .active {
+      background: #ffe066 !important;
+      color: #000;
+      font-weight: bold;
+    }
+    #seekbar {
+      width: 100%;
+      margin: 10px 0;
+      touch-action: none;
+    }
+    #message {
+      margin: 10px 0;
+      color: #007700;
+      font-size: 1em;
+      min-height: 1.5em;
+    }
+    .skip-buttons {
+      margin: 10px 0 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .skip-buttons button {
+      flex: 1 1 28%;
+      min-width: 90px;
+      margin: 0 2px 6px 2px;
+      padding: 12px 0;
+      font-size: 1em;
+      border: none;
+      border-radius: 4px;
+      background: #e0e0e0;
+      color: #333;
+      transition: background 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .skip-buttons button:active {
+      background: #ffe066;
+    }
+    input[type="file"] {
+      font-size: 1em;
+      margin-bottom: 10px;
+    }
+    audio {
+      width: 100%;
+      margin: 8px 0 2px 0;
+    }
+    @media (max-width: 600px) {
+      .lyrics-display {
+        font-size: 1em;
+        min-height: 120px;
+        max-height: 200px;
+      }
+      .skip-buttons button {
+        min-width: 70px;
+        font-size: 0.95em;
+        padding: 10px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h2>LRC 歌詞同期プレーヤー</h2>
+  <input type="file" id="lrcFileInput" accept=".lrc,.txt">
+  <input type="file" id="audioFileInput" accept="audio/*">
+  <br>
+  <audio id="audio" controls preload="auto"></audio>
+  <div class="skip-buttons">
+    <button onclick="skipTime(-60)">&#8678; 1分戻る</button>
+    <button onclick="skipTime(-10)">&#8678; 10秒戻る</button>
+    <button onclick="skipTime(-5)">&#8678; 5秒戻る</button>
+    <button onclick="skipTime(5)">5秒進む &#8680;</button>
+    <button onclick="skipTime(10)">10秒進む &#8680;</button>
+    <button onclick="skipTime(60)">1分進む &#8680;</button>
+  </div>
+  <input type="range" id="seekbar" value="0" min="0" max="100" step="1">
+  <div id="lyricsDisplay" class="lyrics-display"></div>
+  <div id="message"></div>
+  <script>
+    const lrcFileInput = document.getElementById('lrcFileInput');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const audio = document.getElementById('audio');
+    const lyricsDisplay = document.getElementById('lyricsDisplay');
+    const seekbar = document.getElementById('seekbar');
+    const message = document.getElementById('message');
+
+    let lyrics = [];
+    let currentLyricIndex = -1;
+
+    // スキップボタンの処理
+    function skipTime(sec) {
+      if (!audio.duration) return;
+      let newTime = audio.currentTime + sec;
+      if (newTime < 0) newTime = 0;
+      if (newTime > audio.duration) newTime = audio.duration;
+      audio.currentTime = newTime;
+    }
+
+    // LRCファイル読み込み
+    lrcFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        lyrics = parseLRC(e.target.result);
+        renderLyrics();
+        message.textContent = `"${file.name}" (LRC) がロードされました。`;
+      };
+      reader.readAsText(file);
+    });
+
+    // オーディオファイル読み込み
+    audioFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      audio.src = URL.createObjectURL(file);
+      audio.load();
+      message.textContent = `"${file.name}" (音楽) がロードされました。`;
+    });
+
+    // LRC解析関数
+    function parseLRC(content) {
+      const lines = content.split('\n');
+      const regex = /\[(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+      const result = [];
+      for (const line of lines) {
+        const match = line.match(regex);
+        if (match) {
+          const hours = match[1] ? parseInt(match[1], 10) : 0;
+          const minutes = parseInt(match[2], 10);
+          const seconds = parseInt(match[3], 10);
+          const ms = parseInt(match[4], 10);
+          const time = hours * 3600 + minutes * 60 + seconds + ms / (match[4].length === 2 ? 100 : 1000);
+          const text = match[5].trim();
+          result.push({ time, text });
+        }
+      }
+      result.sort((a, b) => a.time - b.time);
+      return result;
+    }
+
+    // 歌詞表示
+    function renderLyrics() {
+      lyricsDisplay.innerHTML = '';
+      lyrics.forEach((line, idx) => {
+        const p = document.createElement('p');
+        p.textContent = line.text;
+        p.className = 'lyrics-line';
+        p.dataset.index = idx;
+        lyricsDisplay.appendChild(p);
+      });
+      currentLyricIndex = -1;
+    }
+
+    // 歌詞同期
+    audio.addEventListener('timeupdate', () => {
+      if (!lyrics.length || !audio.duration) return;
+      const current = audio.currentTime;
+      let newIndex = -1;
+      for (let i = 0; i < lyrics.length; i++) {
+        const nextTime = (i + 1 < lyrics.length) ? lyrics[i + 1].time : Infinity;
+        if (current >= lyrics[i].time && current < nextTime) {
+          newIndex = i;
+          break;
+        }
+      }
+      if (newIndex !== currentLyricIndex) {
+        if (currentLyricIndex !== -1) {
+          lyricsDisplay.querySelector(`[data-index="${currentLyricIndex}"]`)?.classList.remove('active');
+        }
+        if (newIndex !== -1) {
+          const el = lyricsDisplay.querySelector(`[data-index="${newIndex}"]`);
+          el?.classList.add('active');
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        currentLyricIndex = newIndex;
+      }
+      // 再生バー更新
+      if (!seekbar.dragging && audio.duration) {
+        seekbar.value = Math.floor((audio.currentTime / audio.duration) * 100) || 0;
+      }
+    });
+
+    // 再生バー操作
+    seekbar.addEventListener('input', (e) => {
+      seekbar.dragging = true;
+    });
+    seekbar.addEventListener('change', (e) => {
+      if (audio.duration) {
+        audio.currentTime = (seekbar.value / 100) * audio.duration;
+      }
+      seekbar.dragging = false;
+    });
+
+    // 歌詞クリックでシーク
+    lyricsDisplay.addEventListener('click', (event) => {
+      const line = event.target.closest('.lyrics-line');
+      if (!line) return;
+      const idx = parseInt(line.dataset.index, 10);
+      if (!isNaN(idx) && lyrics[idx]) {
+        audio.currentTime = lyrics[idx].time;
+        audio.pause();
+        message.textContent = `歌詞の行「${lyrics[idx].text}」に移動しました。再生ボタンを押してください。`;
+      }
+    });
+
+    // タッチデバイスでのドラッグ判定
+    seekbar.addEventListener('touchstart', () => { seekbar.dragging = true; });
+    seekbar.addEventListener('touchend', () => { seekbar.dragging = false; });
+  </script>
+</body>
+</html>
