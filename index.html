@@ -11,10 +11,7 @@
       padding: 12px;
       background: #f6f6f6;
     }
-    h2 {
-      font-size: 1.4em;
-      margin-bottom: 10px;
-    }
+    h2 { font-size: 1.4em; margin-bottom: 10px; }
     .lyrics-display {
       height: 40vh;
       min-height: 160px;
@@ -27,7 +24,10 @@
       font-size: 1.1em;
       border-radius: 8px;
       box-sizing: border-box;
+      text-align: center; /* デフォルトは中央揃え */
+      transition: text-align 0.2s;
     }
+    .left-align { text-align: left !important; }
     .lyrics-line {
       cursor: pointer;
       margin: 0;
@@ -64,7 +64,7 @@
       gap: 8px;
       justify-content: center;
     }
-    .skip-buttons button {
+    .skip-buttons button, #alignBtn {
       flex: 1 1 28%;
       min-width: 90px;
       margin: 0 2px 6px 2px;
@@ -76,8 +76,9 @@
       color: #333;
       transition: background 0.2s;
       box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      cursor: pointer;
     }
-    .skip-buttons button:active {
+    .skip-buttons button:active, #alignBtn:active {
       background: #ffe066;
     }
     input[type="file"] {
@@ -89,16 +90,8 @@
       margin: 8px 0 2px 0;
     }
     @media (max-width: 600px) {
-      .lyrics-display {
-        font-size: 1em;
-        min-height: 120px;
-        max-height: 200px;
-      }
-      .skip-buttons button {
-        min-width: 70px;
-        font-size: 0.95em;
-        padding: 10px 0;
-      }
+      .lyrics-display { font-size: 1em; min-height: 120px; max-height: 200px; }
+      .skip-buttons button, #alignBtn { min-width: 70px; font-size: 0.95em; padding: 10px 0; }
     }
   </style>
 </head>
@@ -106,6 +99,7 @@
   <h2>LRC 歌詞同期プレーヤー</h2>
   <input type="file" id="lrcFileInput" accept=".lrc,.txt">
   <input type="file" id="audioFileInput" accept="audio/*">
+  <button id="alignBtn">字幕左揃えモード</button>
   <br>
   <audio id="audio" controls preload="auto"></audio>
   <div class="skip-buttons">
@@ -126,9 +120,11 @@
     const lyricsDisplay = document.getElementById('lyricsDisplay');
     const seekbar = document.getElementById('seekbar');
     const message = document.getElementById('message');
+    const alignBtn = document.getElementById('alignBtn');
 
     let lyrics = [];
     let currentLyricIndex = -1;
+    let leftAlignMode = false;
 
     // スキップボタンの処理
     function skipTime(sec) {
@@ -148,6 +144,9 @@
         lyrics = parseLRC(e.target.result);
         renderLyrics();
         message.textContent = `"${file.name}" (LRC) がロードされました。`;
+        // キャッシュ保存
+        localStorage.setItem('lrc_content', e.target.result);
+        localStorage.setItem('lrc_filename', file.name);
       };
       reader.readAsText(file);
     });
@@ -222,6 +221,8 @@
       if (!seekbar.dragging && audio.duration) {
         seekbar.value = Math.floor((audio.currentTime / audio.duration) * 100) || 0;
       }
+      // 再生位置キャッシュ
+      localStorage.setItem('audio_position', audio.currentTime);
     });
 
     // 再生バー操作
@@ -244,6 +245,44 @@
         audio.currentTime = lyrics[idx].time;
         audio.pause();
         message.textContent = `歌詞の行「${lyrics[idx].text}」に移動しました。再生ボタンを押してください。`;
+      }
+    });
+
+    // 字幕左揃えモード切替
+    alignBtn.addEventListener('click', () => {
+      leftAlignMode = !leftAlignMode;
+      if (leftAlignMode) {
+        lyricsDisplay.classList.add('left-align');
+        alignBtn.textContent = '字幕中央揃えモード';
+      } else {
+        lyricsDisplay.classList.remove('left-align');
+        alignBtn.textContent = '字幕左揃えモード';
+      }
+      // 設定キャッシュ
+      localStorage.setItem('left_align', leftAlignMode ? '1' : '0');
+    });
+
+    // ページ読み込み時にキャッシュ復元
+    window.addEventListener('DOMContentLoaded', () => {
+      // 歌詞
+      const cachedLRC = localStorage.getItem('lrc_content');
+      const cachedName = localStorage.getItem('lrc_filename');
+      if (cachedLRC) {
+        lyrics = parseLRC(cachedLRC);
+        renderLyrics();
+        message.textContent = `"${cachedName}" (LRC) をキャッシュから復元しました。`;
+      }
+      // 再生位置
+      const pos = parseFloat(localStorage.getItem('audio_position'));
+      if (!isNaN(pos)) {
+        audio.currentTime = pos;
+      }
+      // 左揃え設定
+      const align = localStorage.getItem('left_align');
+      if (align === '1') {
+        leftAlignMode = true;
+        lyricsDisplay.classList.add('left-align');
+        alignBtn.textContent = '字幕中央揃えモード';
       }
     });
 
