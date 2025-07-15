@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>LRC 歌詞同期プレーヤー</title>
+  <title>LRC 歌詞同期プレーヤー（両形式対応・自動ハイライト/スクロール）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body {
@@ -24,7 +24,7 @@
       font-size: 1.1em;
       border-radius: 8px;
       box-sizing: border-box;
-      text-align: center; /* デフォルトは中央揃え */
+      text-align: center;
       transition: text-align 0.2s;
     }
     .left-align { text-align: left !important; }
@@ -126,7 +126,6 @@
     let currentLyricIndex = -1;
     let leftAlignMode = false;
 
-    // スキップボタンの処理
     function skipTime(sec) {
       if (!audio.duration) return;
       let newTime = audio.currentTime + sec;
@@ -135,90 +134,48 @@
       audio.currentTime = newTime;
     }
 
-    // LRCファイル読み込み
-    lrcFileInput.addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        lyrics = parseLRC(e.target.result);
-        renderLyrics();
-        message.textContent = `"${file.name}" (LRC) がロードされました。`;
-        // キャッシュ保存
-        localStorage.setItem('lrc_content', e.target.result);
-        localStorage.setItem('lrc_filename', file.name);
-      };
-      reader.readAsText(file);
-    });
+    // 両方のLRCフォーマットに対応
+    function parseLRC(content) {
+      const lines = content.split('\n');
+      const result = [];
+      // [mm:ss.xx] 例: [02:29.89]
+      const regex1 = /\[(\d{2}):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
+      // [hh:mm.ss] 例: [01:23.45]
+      const regex2 = /\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)/;
 
-    // オーディオファイル読み込み
-    audioFileInput.addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      audio.src = URL.createObjectURL(file);
-      audio.load();
-      message.textContent = `"${file.name}" (音楽) がロードされました。`;
-    });
-
-    // LRC解析関数
-// 修正済み： [hh:mm.ss] に対応させる
-function parseLRC(content) {
-  const lines = content.split('\n');
-  const result = [];
-
-  // mm:ss.xx と hh:mm.ss の両方にマッチする正規表現
-  const regex = /\[(?:(\d{2}):)?(\d{2}):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
-
-  for (const line of lines) {
-    const match = line.match(regex);
-    if (match) {
-      // match 配列の構造:
-      // match[1]: hh または undefined（mm:ss.xx の場合は undefined）
-      // match[2]: mm（mm:ss.xx の場合は分、hh:mm.ss の場合は分）
-      // match[3]: ss（秒）
-      // match[4]: 小数点以下（百分秒またはミリ秒）、省略可
-      // match[5]: 歌詞テキスト
-
-      let hours = 0;
-      let minutes;
-      let seconds;
-      let fraction = 0;
-
-      if (match[1] !== undefined) {
-        // hh:mm:ss.xxx 形式（時あり）
-        hours = parseInt(match[1], 10);
-        minutes = parseInt(match[2], 10);
-        seconds = parseInt(match[3], 10);
-      } else {
-        // mm:ss.xx 形式（時なし）
-        minutes = parseInt(match[2], 10);
-        seconds = parseInt(match[3], 10);
-      }
-      if (match[4]) {
-        // 小数部（2桁か3桁）、3桁の場合千分の1秒
-        let fracStr = match[4];
-        if (fracStr.length === 2) {
-          fraction = parseInt(fracStr, 10) / 100; // 百分の1秒
-        } else if (fracStr.length === 3) {
-          fraction = parseInt(fracStr, 10) / 1000; // 千分の1秒
+      for (const line of lines) {
+        let match = line.match(regex1);
+        if (match) {
+          let minutes = parseInt(match[1], 10);
+          let seconds = parseInt(match[2], 10);
+          let fraction = 0;
+          if (match[3]) {
+            if (match[3].length === 2) fraction = parseInt(match[3], 10) / 100;
+            else if (match[3].length === 3) fraction = parseInt(match[3], 10) / 1000;
+          }
+          const time = minutes * 60 + seconds + fraction;
+          const text = match[4].trim();
+          result.push({ time, text });
+          continue;
+        }
+        match = line.match(regex2);
+        if (match) {
+          // [hh:mm.ss] の場合（hhは1～2桁）
+          let hours = parseInt(match[1], 10);
+          let minutes = parseInt(match[2], 10);
+          let ms = match[3] ? match[3] : '00';
+          let fraction = 0;
+          if (ms.length === 2) fraction = parseInt(ms, 10) / 100;
+          else if (ms.length === 3) fraction = parseInt(ms, 10) / 1000;
+          const time = hours * 3600 + minutes * 60 + fraction;
+          const text = match[4].trim();
+          result.push({ time, text });
         }
       }
-
-      // 時間を秒に換算（時がない場合は0）
-      const time = hours * 3600 + minutes * 60 + seconds + fraction;
-
-      const text = match[5].trim();
-      result.push({ time, text });
+      result.sort((a, b) => a.time - b.time);
+      return result;
     }
-  }
-  result.sort((a, b) => a.time - b.time);
-  return result;
-}
 
-
-
-
-    // 歌詞表示
     function renderLyrics() {
       lyricsDisplay.innerHTML = '';
       lyrics.forEach((line, idx) => {
@@ -231,7 +188,28 @@ function parseLRC(content) {
       currentLyricIndex = -1;
     }
 
-    // 歌詞同期
+    lrcFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        lyrics = parseLRC(e.target.result);
+        renderLyrics();
+        message.textContent = `"${file.name}" (LRC) がロードされました。`;
+        localStorage.setItem('lrc_content', e.target.result);
+        localStorage.setItem('lrc_filename', file.name);
+      };
+      reader.readAsText(file);
+    });
+
+    audioFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      audio.src = URL.createObjectURL(file);
+      audio.load();
+      message.textContent = `"${file.name}" (音楽) がロードされました。`;
+    });
+
     audio.addEventListener('timeupdate', () => {
       if (!lyrics.length || !audio.duration) return;
       const current = audio.currentTime;
@@ -254,26 +232,22 @@ function parseLRC(content) {
         }
         currentLyricIndex = newIndex;
       }
-      // 再生バー更新
       if (!seekbar.dragging && audio.duration) {
         seekbar.value = Math.floor((audio.currentTime / audio.duration) * 100) || 0;
       }
-      // 再生位置キャッシュ
       localStorage.setItem('audio_position', audio.currentTime);
     });
 
-    // 再生バー操作
-    seekbar.addEventListener('input', (e) => {
+    seekbar.addEventListener('input', () => {
       seekbar.dragging = true;
     });
-    seekbar.addEventListener('change', (e) => {
+    seekbar.addEventListener('change', () => {
       if (audio.duration) {
         audio.currentTime = (seekbar.value / 100) * audio.duration;
       }
       seekbar.dragging = false;
     });
 
-    // 歌詞クリックでシーク
     lyricsDisplay.addEventListener('click', (event) => {
       const line = event.target.closest('.lyrics-line');
       if (!line) return;
@@ -285,7 +259,6 @@ function parseLRC(content) {
       }
     });
 
-    // 字幕左揃えモード切替
     alignBtn.addEventListener('click', () => {
       leftAlignMode = !leftAlignMode;
       if (leftAlignMode) {
@@ -295,13 +268,10 @@ function parseLRC(content) {
         lyricsDisplay.classList.remove('left-align');
         alignBtn.textContent = '字幕左揃えモード';
       }
-      // 設定キャッシュ
       localStorage.setItem('left_align', leftAlignMode ? '1' : '0');
     });
 
-    // ページ読み込み時にキャッシュ復元
     window.addEventListener('DOMContentLoaded', () => {
-      // 歌詞
       const cachedLRC = localStorage.getItem('lrc_content');
       const cachedName = localStorage.getItem('lrc_filename');
       if (cachedLRC) {
@@ -309,12 +279,10 @@ function parseLRC(content) {
         renderLyrics();
         message.textContent = `"${cachedName}" (LRC) をキャッシュから復元しました。`;
       }
-      // 再生位置
       const pos = parseFloat(localStorage.getItem('audio_position'));
       if (!isNaN(pos)) {
         audio.currentTime = pos;
       }
-      // 左揃え設定
       const align = localStorage.getItem('left_align');
       if (align === '1') {
         leftAlignMode = true;
@@ -323,9 +291,8 @@ function parseLRC(content) {
       }
     });
 
-    // タッチデバイスでのドラッグ判定
     seekbar.addEventListener('touchstart', () => { seekbar.dragging = true; });
     seekbar.addEventListener('touchend', () => { seekbar.dragging = false; });
   </script>
 </body>
-</html> このコードで歌詞の同期の部分で時間を [hh:mm.ss]に対応させて
+</html>
