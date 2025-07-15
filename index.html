@@ -171,14 +171,14 @@ function parseLRC(content) {
     if (match) {
       const hours = parseInt(match[1], 10);
       const minutes = parseInt(match[2], 10);
-      const ms = parseInt(match[3].padEnd(3, '0'), 10); // 小数部2桁→3桁に丸め
-      const time = hours * 60 + minutes + ms / 1000; // 時：分→総分数で計算（3600不要）
+      const frac = match[3].padEnd(2, '0'); // 2桁取り出し
+      const seconds = parseInt(frac, 10) / 100; // 0.01単位
       const text = match[4].trim();
+      const time = hours * 60 + minutes + seconds;
       result.push({ time, text });
     }
   }
-  result.sort((a, b) => a.time - b.time);
-  return result;
+  return result.sort((a, b) => a.time - b.time);
 }
 
 
