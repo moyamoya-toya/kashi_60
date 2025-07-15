@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>LRC 歌詞同期プレーヤー（100分超もOK）</title>
+  <title>LRC 歌詞同期プレーヤー（[分:秒.小数]専用）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body {
@@ -79,7 +79,7 @@
   </style>
 </head>
 <body>
-  <h2>LRC 歌詞同期プレーヤー（100分超にも対応）</h2>
+  <h2>LRC 歌詞同期プレーヤー（[123:45.67]形式のみ対応）</h2>
   <input type="file" id="lrcFileInput" accept=".lrc,.txt">
   <input type="file" id="audioFileInput" accept="audio/*">
   <button id="alignBtn">字幕左揃えモード</button>
@@ -117,30 +117,28 @@
       audio.currentTime = newTime;
     }
 
-    // 100分超もOKなLRCタグパーサ（[mm:ss.xx]のみを厳密に認識、分数制限なし）
+    // [分:秒.百分秒]形式のみ（任意桁の分, 2桁の秒, 2～3桁の小数）
     function parseLRC(content) {
       const lines = content.split('\n');
       const result = [];
-      // [mm:ss.xx] のみを認識。分は2桁以上/何桁でもOK
-      const regex = /\[(\d+):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
-
+      const regex = /\[(\d+):(\d{2})[.:](\d{2,3})\](.*)/;
       for (const line of lines) {
         const match = line.match(regex);
         if (match) {
-          let minutes = parseInt(match[1], 10);
-          let seconds = parseInt(match[2], 10);
+          const minutes = parseInt(match[1], 10);
+          const seconds = parseInt(match[2], 10);
           let fraction = 0;
-          let text = match[4].trim();
-
-          if (match[3]) {
-            if (match[3].length === 2) fraction = parseInt(match[3], 10) / 100;
-            else if (match[3].length === 3) fraction = parseInt(match[3], 10) / 1000;
+          const fracStr = match[3];
+          if (fracStr.length === 2) {
+            fraction = parseInt(fracStr, 10) / 100;
+          } else if (fracStr.length === 3) {
+            fraction = parseInt(fracStr, 10) / 1000;
           }
           const time = minutes * 60 + seconds + fraction;
+          const text = match[4].trim();
           result.push({ time, text });
         }
       }
-      // タイムスタンプ順ソート
       result.sort((a, b) => a.time - b.time);
       return result;
     }
