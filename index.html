@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>LRC 歌詞同期プレーヤー</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: sans-serif;
@@ -11,7 +11,10 @@
       padding: 12px;
       background: #f6f6f6;
     }
-    h2 { font-size: 1.4em; margin-bottom: 10px; }
+    h2 {
+      font-size: 1.4em;
+      margin-bottom: 10px;
+    }
     .lyrics-display {
       height: 40vh;
       min-height: 160px;
@@ -24,10 +27,12 @@
       font-size: 1.1em;
       border-radius: 8px;
       box-sizing: border-box;
-      text-align: center; /* デフォルトは中央揃え */
+      text-align: center;
       transition: text-align 0.2s;
     }
-    .left-align { text-align: left !important; }
+    .left-align {
+      text-align: left !important;
+    }
     .lyrics-line {
       cursor: pointer;
       margin: 0;
@@ -64,7 +69,8 @@
       gap: 8px;
       justify-content: center;
     }
-    .skip-buttons button, #alignBtn {
+    .skip-buttons button,
+    #alignBtn {
       flex: 1 1 28%;
       min-width: 90px;
       margin: 0 2px 6px 2px;
@@ -75,10 +81,11 @@
       background: #e0e0e0;
       color: #333;
       transition: background 0.2s;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
       cursor: pointer;
     }
-    .skip-buttons button:active, #alignBtn:active {
+    .skip-buttons button:active,
+    #alignBtn:active {
       background: #ffe066;
     }
     input[type="file"] {
@@ -90,17 +97,26 @@
       margin: 8px 0 2px 0;
     }
     @media (max-width: 600px) {
-      .lyrics-display { font-size: 1em; min-height: 120px; max-height: 200px; }
-      .skip-buttons button, #alignBtn { min-width: 70px; font-size: 0.95em; padding: 10px 0; }
+      .lyrics-display {
+        font-size: 1em;
+        min-height: 120px;
+        max-height: 200px;
+      }
+      .skip-buttons button,
+      #alignBtn {
+        min-width: 70px;
+        font-size: 0.95em;
+        padding: 10px 0;
+      }
     }
   </style>
 </head>
 <body>
   <h2>LRC 歌詞同期プレーヤー</h2>
-  <input type="file" id="lrcFileInput" accept=".lrc,.txt">
-  <input type="file" id="audioFileInput" accept="audio/*">
+  <input type="file" id="lrcFileInput" accept=".lrc,.txt" />
+  <input type="file" id="audioFileInput" accept="audio/*" />
   <button id="alignBtn">字幕左揃えモード</button>
-  <br>
+  <br />
   <audio id="audio" controls preload="auto"></audio>
   <div class="skip-buttons">
     <button onclick="skipTime(-60)">&#8678; 1分戻る</button>
@@ -110,33 +126,65 @@
     <button onclick="skipTime(10)">10秒進む &#8680;</button>
     <button onclick="skipTime(60)">1分進む &#8680;</button>
   </div>
-  <input type="range" id="seekbar" value="0" min="0" max="100" step="1">
+  <input type="range" id="seekbar" value="0" min="0" max="100" step="1" />
   <div id="lyricsDisplay" class="lyrics-display"></div>
   <div id="message"></div>
+
   <script>
-    const lrcFileInput = document.getElementById('lrcFileInput');
-    const audioFileInput = document.getElementById('audioFileInput');
-    const audio = document.getElementById('audio');
-    const lyricsDisplay = document.getElementById('lyricsDisplay');
-    const seekbar = document.getElementById('seekbar');
-    const message = document.getElementById('message');
-    const alignBtn = document.getElementById('alignBtn');
+    const lrcFileInput = document.getElementById("lrcFileInput");
+    const audioFileInput = document.getElementById("audioFileInput");
+    const audio = document.getElementById("audio");
+    const lyricsDisplay = document.getElementById("lyricsDisplay");
+    const seekbar = document.getElementById("seekbar");
+    const message = document.getElementById("message");
+    const alignBtn = document.getElementById("alignBtn");
 
     let lyrics = [];
     let currentLyricIndex = -1;
     let leftAlignMode = false;
 
-    // スキップボタンの処理
     function skipTime(sec) {
       if (!audio.duration) return;
       let newTime = audio.currentTime + sec;
-      if (newTime < 0) newTime = 0;
-      if (newTime > audio.duration) newTime = audio.duration;
-      audio.currentTime = newTime;
+      audio.currentTime = Math.max(0, Math.min(audio.duration, newTime));
     }
 
-    // LRCファイル読み込み
-    lrcFileInput.addEventListener('change', (event) => {
+    // ✅ [hh:mm.ss] 対応の LRC 解析関数
+    function parseLRC(content) {
+      const lines = content.split("\n");
+      const regex = /\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)/;
+      const result = [];
+
+      for (const line of lines) {
+        const match = line.match(regex);
+        if (match) {
+          let hours = parseInt(match[1], 10);
+          let minutes = parseInt(match[2], 10);
+          let frac = match[3].padEnd(3, "0"); // 2桁のとき100分で補完
+          let millis = parseInt(frac, 10);
+
+          const totalSec = hours * 3600 + minutes + millis / 1000;
+          const text = match[4].trim();
+          result.push({ time: totalSec, text });
+        }
+      }
+
+      return result.sort((a, b) => a.time - b.time);
+    }
+
+    function renderLyrics() {
+      lyricsDisplay.innerHTML = "";
+      lyrics.forEach((line, idx) => {
+        const p = document.createElement("p");
+        p.textContent = line.text;
+        p.className = "lyrics-line";
+        p.dataset.index = idx;
+        lyricsDisplay.appendChild(p);
+      });
+      currentLyricIndex = -1;
+    }
+
+    lrcFileInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
@@ -144,151 +192,113 @@
         lyrics = parseLRC(e.target.result);
         renderLyrics();
         message.textContent = `"${file.name}" (LRC) がロードされました。`;
-        // キャッシュ保存
-        localStorage.setItem('lrc_content', e.target.result);
-        localStorage.setItem('lrc_filename', file.name);
+        localStorage.setItem("lrc_content", e.target.result);
+        localStorage.setItem("lrc_filename", file.name);
       };
       reader.readAsText(file);
     });
 
-    // オーディオファイル読み込み
-    audioFileInput.addEventListener('change', (event) => {
+    audioFileInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
       if (!file) return;
       audio.src = URL.createObjectURL(file);
       audio.load();
-      message.textContent = `"${file.name}" (音楽) がロードされました。`;
+      message.textContent = `"${file.name}" (音声) がロードされました。`;
     });
 
-    // LRC解析関数
-    function parseLRC(content) {
-      const lines = content.split('\n');
-      const regex = /\[(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
-      const result = [];
-      for (const line of lines) {
-        const match = line.match(regex);
-        if (match) {
-          const hours = match[1] ? parseInt(match[1], 10) : 0;
-          const minutes = parseInt(match[2], 10);
-          const seconds = parseInt(match[3], 10);
-          const ms = parseInt(match[4], 10);
-          const time = hours * 3600 + minutes * 60 + seconds + ms / (match[4].length === 2 ? 100 : 1000);
-          const text = match[5].trim();
-          result.push({ time, text });
-        }
-      }
-      result.sort((a, b) => a.time - b.time);
-      return result;
-    }
-
-    // 歌詞表示
-    function renderLyrics() {
-      lyricsDisplay.innerHTML = '';
-      lyrics.forEach((line, idx) => {
-        const p = document.createElement('p');
-        p.textContent = line.text;
-        p.className = 'lyrics-line';
-        p.dataset.index = idx;
-        lyricsDisplay.appendChild(p);
-      });
-      currentLyricIndex = -1;
-    }
-
-    // 歌詞同期
-    audio.addEventListener('timeupdate', () => {
+    audio.addEventListener("timeupdate", () => {
       if (!lyrics.length || !audio.duration) return;
       const current = audio.currentTime;
       let newIndex = -1;
       for (let i = 0; i < lyrics.length; i++) {
-        const nextTime = (i + 1 < lyrics.length) ? lyrics[i + 1].time : Infinity;
-        if (current >= lyrics[i].time && current < nextTime) {
+        const next = i + 1 < lyrics.length ? lyrics[i + 1].time : Infinity;
+        if (current >= lyrics[i].time && current < next) {
           newIndex = i;
           break;
         }
       }
+
       if (newIndex !== currentLyricIndex) {
         if (currentLyricIndex !== -1) {
-          lyricsDisplay.querySelector(`[data-index="${currentLyricIndex}"]`)?.classList.remove('active');
+          const prevEl = lyricsDisplay.querySelector(`[data-index="${currentLyricIndex}"]`);
+          prevEl?.classList.remove("active");
         }
         if (newIndex !== -1) {
           const el = lyricsDisplay.querySelector(`[data-index="${newIndex}"]`);
-          el?.classList.add('active');
-          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el?.classList.add("active");
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
         }
         currentLyricIndex = newIndex;
       }
-      // 再生バー更新
+
       if (!seekbar.dragging && audio.duration) {
         seekbar.value = Math.floor((audio.currentTime / audio.duration) * 100) || 0;
       }
-      // 再生位置キャッシュ
-      localStorage.setItem('audio_position', audio.currentTime);
+
+      localStorage.setItem("audio_position", audio.currentTime);
     });
 
-    // 再生バー操作
-    seekbar.addEventListener('input', (e) => {
+    seekbar.addEventListener("input", () => {
       seekbar.dragging = true;
     });
-    seekbar.addEventListener('change', (e) => {
+
+    seekbar.addEventListener("change", () => {
       if (audio.duration) {
         audio.currentTime = (seekbar.value / 100) * audio.duration;
       }
       seekbar.dragging = false;
     });
 
-    // 歌詞クリックでシーク
-    lyricsDisplay.addEventListener('click', (event) => {
-      const line = event.target.closest('.lyrics-line');
+    lyricsDisplay.addEventListener("click", (event) => {
+      const line = event.target.closest(".lyrics-line");
       if (!line) return;
       const idx = parseInt(line.dataset.index, 10);
       if (!isNaN(idx) && lyrics[idx]) {
         audio.currentTime = lyrics[idx].time;
         audio.pause();
-        message.textContent = `歌詞の行「${lyrics[idx].text}」に移動しました。再生ボタンを押してください。`;
+        message.textContent = `歌詞「${lyrics[idx].text}」に移動しました。再生してください。`;
       }
     });
 
-    // 字幕左揃えモード切替
-    alignBtn.addEventListener('click', () => {
+    alignBtn.addEventListener("click", () => {
       leftAlignMode = !leftAlignMode;
       if (leftAlignMode) {
-        lyricsDisplay.classList.add('left-align');
-        alignBtn.textContent = '字幕中央揃えモード';
+        lyricsDisplay.classList.add("left-align");
+        alignBtn.textContent = "字幕中央揃えモード";
       } else {
-        lyricsDisplay.classList.remove('left-align');
-        alignBtn.textContent = '字幕左揃えモード';
+        lyricsDisplay.classList.remove("left-align");
+        alignBtn.textContent = "字幕左揃えモード";
       }
-      // 設定キャッシュ
-      localStorage.setItem('left_align', leftAlignMode ? '1' : '0');
+      localStorage.setItem("left_align", leftAlignMode ? "1" : "0");
     });
 
-    // ページ読み込み時にキャッシュ復元
-    window.addEventListener('DOMContentLoaded', () => {
-      // 歌詞
-      const cachedLRC = localStorage.getItem('lrc_content');
-      const cachedName = localStorage.getItem('lrc_filename');
+    window.addEventListener("DOMContentLoaded", () => {
+      const cachedLRC = localStorage.getItem("lrc_content");
+      const cachedName = localStorage.getItem("lrc_filename");
       if (cachedLRC) {
         lyrics = parseLRC(cachedLRC);
         renderLyrics();
-        message.textContent = `"${cachedName}" (LRC) をキャッシュから復元しました。`;
+        message.textContent = `"${cachedName}" をキャッシュから復元しました。`;
       }
-      // 再生位置
-      const pos = parseFloat(localStorage.getItem('audio_position'));
+      const pos = parseFloat(localStorage.getItem("audio_position"));
       if (!isNaN(pos)) {
         audio.currentTime = pos;
       }
-      // 左揃え設定
-      const align = localStorage.getItem('left_align');
-      if (align === '1') {
+      const align = localStorage.getItem("left_align");
+      if (align === "1") {
         leftAlignMode = true;
-        lyricsDisplay.classList.add('left-align');
-        alignBtn.textContent = '字幕中央揃えモード';
+        lyricsDisplay.classList.add("left-align");
+        alignBtn.textContent = "字幕中央揃えモード";
       }
     });
 
-    // タッチデバイスでのドラッグ判定
-    seekbar.addEventListener('touchstart', () => { seekbar.dragging = true; });
-    seekbar.addEventListener('touchend', () => { seekbar.dragging = false; });
+    seekbar.addEventListener("touchstart", () => {
+      seekbar.dragging = true;
+    });
+
+    seekbar.addEventListener("touchend", () => {
+      seekbar.dragging = false;
+    });
   </script>
 </body>
 </html>
