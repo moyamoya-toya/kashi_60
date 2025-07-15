@@ -164,22 +164,57 @@
 // 修正済み： [hh:mm.ss] に対応させる
 function parseLRC(content) {
   const lines = content.split('\n');
-  const regex = /\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)/;
   const result = [];
+
+  // mm:ss.xx と hh:mm.ss の両方にマッチする正規表現
+  const regex = /\[(?:(\d{2}):)?(\d{2}):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
+
   for (const line of lines) {
     const match = line.match(regex);
     if (match) {
-      const hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const frac = match[3].padEnd(2, '0'); // 2桁取り出し
-      const seconds = parseInt(frac, 10) / 100; // 0.01単位
-      const text = match[4].trim();
-      const time = hours * 60 + minutes + seconds;
+      // match 配列の構造:
+      // match[1]: hh または undefined（mm:ss.xx の場合は undefined）
+      // match[2]: mm（mm:ss.xx の場合は分、hh:mm.ss の場合は分）
+      // match[3]: ss（秒）
+      // match[4]: 小数点以下（百分秒またはミリ秒）、省略可
+      // match[5]: 歌詞テキスト
+
+      let hours = 0;
+      let minutes;
+      let seconds;
+      let fraction = 0;
+
+      if (match[1] !== undefined) {
+        // hh:mm:ss.xxx 形式（時あり）
+        hours = parseInt(match[1], 10);
+        minutes = parseInt(match[2], 10);
+        seconds = parseInt(match[3], 10);
+      } else {
+        // mm:ss.xx 形式（時なし）
+        minutes = parseInt(match[2], 10);
+        seconds = parseInt(match[3], 10);
+      }
+      if (match[4]) {
+        // 小数部（2桁か3桁）、3桁の場合千分の1秒
+        let fracStr = match[4];
+        if (fracStr.length === 2) {
+          fraction = parseInt(fracStr, 10) / 100; // 百分の1秒
+        } else if (fracStr.length === 3) {
+          fraction = parseInt(fracStr, 10) / 1000; // 千分の1秒
+        }
+      }
+
+      // 時間を秒に換算（時がない場合は0）
+      const time = hours * 3600 + minutes * 60 + seconds + fraction;
+
+      const text = match[5].trim();
       result.push({ time, text });
     }
   }
-  return result.sort((a, b) => a.time - b.time);
+  result.sort((a, b) => a.time - b.time);
+  return result;
 }
+
 
 
 
