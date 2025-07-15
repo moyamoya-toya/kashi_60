@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>LRC 歌詞同期プレーヤー（両形式対応・自動ハイライト/スクロール）</title>
+  <title>LRC 歌詞同期プレーヤー（100分超もOK）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body {
@@ -11,7 +11,6 @@
       padding: 12px;
       background: #f6f6f6;
     }
-    h2 { font-size: 1.4em; margin-bottom: 10px; }
     .lyrics-display {
       height: 40vh;
       min-height: 160px;
@@ -35,7 +34,6 @@
       transition: background 0.2s;
       border-radius: 4px;
       user-select: none;
-      -webkit-user-select: none;
     }
     .lyrics-line:active,
     .lyrics-line:hover {
@@ -46,17 +44,8 @@
       color: #000;
       font-weight: bold;
     }
-    #seekbar {
-      width: 100%;
-      margin: 10px 0;
-      touch-action: none;
-    }
-    #message {
-      margin: 10px 0;
-      color: #007700;
-      font-size: 1em;
-      min-height: 1.5em;
-    }
+    #seekbar { width: 100%; margin: 10px 0; touch-action: none; }
+    #message { margin: 10px 0; color: #007700; font-size: 1em; min-height: 1.5em; }
     .skip-buttons {
       margin: 10px 0 0 0;
       display: flex;
@@ -81,14 +70,8 @@
     .skip-buttons button:active, #alignBtn:active {
       background: #ffe066;
     }
-    input[type="file"] {
-      font-size: 1em;
-      margin-bottom: 10px;
-    }
-    audio {
-      width: 100%;
-      margin: 8px 0 2px 0;
-    }
+    input[type="file"] { font-size: 1em; margin-bottom: 10px; }
+    audio { width: 100%; margin: 8px 0 2px 0; }
     @media (max-width: 600px) {
       .lyrics-display { font-size: 1em; min-height: 120px; max-height: 200px; }
       .skip-buttons button, #alignBtn { min-width: 70px; font-size: 0.95em; padding: 10px 0; }
@@ -96,7 +79,7 @@
   </style>
 </head>
 <body>
-  <h2>LRC 歌詞同期プレーヤー</h2>
+  <h2>LRC 歌詞同期プレーヤー（100分超にも対応）</h2>
   <input type="file" id="lrcFileInput" accept=".lrc,.txt">
   <input type="file" id="audioFileInput" accept="audio/*">
   <button id="alignBtn">字幕左揃えモード</button>
@@ -134,44 +117,30 @@
       audio.currentTime = newTime;
     }
 
-    // 両方のLRCフォーマットに対応
+    // 100分超もOKなLRCタグパーサ（[mm:ss.xx]のみを厳密に認識、分数制限なし）
     function parseLRC(content) {
       const lines = content.split('\n');
       const result = [];
-      // [mm:ss.xx] 例: [02:29.89]
-      const regex1 = /\[(\d{2}):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
-      // [hh:mm.ss] 例: [01:23.45]
-      const regex2 = /\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)/;
+      // [mm:ss.xx] のみを認識。分は2桁以上/何桁でもOK
+      const regex = /\[(\d+):(\d{2})(?:[.:](\d{2,3}))?\](.*)/;
 
       for (const line of lines) {
-        let match = line.match(regex1);
+        const match = line.match(regex);
         if (match) {
           let minutes = parseInt(match[1], 10);
           let seconds = parseInt(match[2], 10);
           let fraction = 0;
+          let text = match[4].trim();
+
           if (match[3]) {
             if (match[3].length === 2) fraction = parseInt(match[3], 10) / 100;
             else if (match[3].length === 3) fraction = parseInt(match[3], 10) / 1000;
           }
           const time = minutes * 60 + seconds + fraction;
-          const text = match[4].trim();
-          result.push({ time, text });
-          continue;
-        }
-        match = line.match(regex2);
-        if (match) {
-          // [hh:mm.ss] の場合（hhは1～2桁）
-          let hours = parseInt(match[1], 10);
-          let minutes = parseInt(match[2], 10);
-          let ms = match[3] ? match[3] : '00';
-          let fraction = 0;
-          if (ms.length === 2) fraction = parseInt(ms, 10) / 100;
-          else if (ms.length === 3) fraction = parseInt(ms, 10) / 1000;
-          const time = hours * 3600 + minutes * 60 + fraction;
-          const text = match[4].trim();
           result.push({ time, text });
         }
       }
+      // タイムスタンプ順ソート
       result.sort((a, b) => a.time - b.time);
       return result;
     }
